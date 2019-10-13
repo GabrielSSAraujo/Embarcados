@@ -1,0 +1,106 @@
+/*
+Código para sistema de monitoramento usando protocolo i2C no sistema master/slave.
+*/
+
+
+#include <msp430g2553.h>
+#include <legacymsp430.h>
+
+// Codigo para o MSP430 configurado como
+// escravo I2C
+#define TEMP BIT1
+#define IN_AD_CH INCH_1
+#define pH BIT0
+#define SCL BIT6
+#define SDA BIT7
+#define DLY 0x6000
+
+unsigned int valor[2];
+
+
+void init_AD(void){
+  
+   WDTCTL = WDTPW + WDTHOLD;                                             //para o timer
+   ADC10CTL1 = INCH_1 + CONSEQ_1;                                        //sequencia simples
+   ADC10CTL0 = ADC10SHT_2 + MSC + ADC10ON + ADC10IE;      
+   ADC10AE0 = pH + TEMP;                                                 //pinos selecionados
+   ADC10DTC1 = 0x2;                                                      //2 conversões
+}
+
+void init_I2C(volatile unsigned int slave_address)
+{
+  UCB0CTL1 |= UCSWRST;                                                   // Enable SW reset
+  UCB0CTL1 &= ~UCTR;
+  UCB0CTL0 = UCMODE_3 + UCSYNC;                                         // I2C Master, synchronous mode
+  UCB0I2COA = slave_address;                                            //|UCGCEN;
+  P1SEL |= SCL | SDA;                                                   // Assign I2C pins to USCI_B0
+  P1SEL2|= SCL | SDA;                                                   // Assign I2C pins to USCI_B0
+  UCB0STAT &= ~(UCSTPIFG | UCSTTIFG);
+  UCB0CTL1 &= ~UCSWRST;                                                 // Clear SW reset, resume operation
+  IE2 |= UCB0RXIE;                                                      //Enable RX and TX interrupt                                                                    //UCB0I2CIE |= UCSTPIE | UCSTTIE;
+}
+
+void Transmit(char data[], int len)
+{
+  volatile unsigned int i;
+  for(i=0; i<len; i++)
+  {
+    while((IFG2 & UCB0TXIFG)==0);
+    UCB0TXBUF = data[i];
+  }
+}
+
+int leitorAD(){
+
+        ADC10CTL0 &= ~ENC;
+       while (ADC10CTL1 & BUSY);
+       ADC10SA = (unsigned int)valor;
+       ADC10CTL0 |= ENC + ADC10SC; //inicia a conversão AD
+       
+      __bis_SR_register(CPUOFF + GIE);
+  }
+  
+int main(void)
+{
+  WDTCTL = WDTPW + WDTHOLD;
+  BCSCTL1 = CALBC1_1MHZ;
+  DCOCTL = CALDCO_1MHZ;
+  init_I2C(0xF);
+  init_AD();
+  
+  _BIS_SR(LPM0_bits + GIE);
+  return 0;
+}
+
+interrupt(USCIAB0TX_VECTOR) USCIAB0TX_ISR(void)
+{
+  int ret;
+  int d;
+  char d_send[2];
+   
+  if(IFG2 & UCB0RXIFG)
+  {
+    d = UCB0RXBUF;
+    leitorAD();
+     
+    if(d==1){
+        ret = valor[d-1]/7.307;
+    }
+    else if(d==2){
+        ret = valor[d-1]/34.1;
+    }
+        
+    while( (UCB0STAT & UCSTTIFG)==0);
+    d_send[0] = ret & 0xff;
+    d_send[1] = ret>>8;
+    Transmit(d_send, 1);
+    UCB0STAT &= ~(UCSTPIFG | UCSTTIFG);
+  } 
+  IFG2 &= ~(UCB0TXIFG|UCB0RXIFG);
+}
+
+#pragma vector=ADC10_VECTOR
+__interrupt void ADC10_ISR(void)
+{
+__bic_SR_register_on_exit(CPUOFF);            // Clear CPUOFF bit from 0(SR)
+}
