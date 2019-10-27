@@ -29,7 +29,7 @@
 // Velocidade do Motor(max)
 int velocMotor = 1048;    
 //Variavel de pulsos
-int conta = 0,number_aqua,number_tip;;     
+int conta = 0,number_aqua,number_tip1,number_tip2=0;     
 // Numero de passos nescessaria para dar uma volta completa
 int passosPorRotacao = 512;
 //Definiçao da sequencia de ativação das bobinas do motor
@@ -75,59 +75,68 @@ int main(){
 
   puts("Qual aquario alimentar 1, 2 ou os dois(3)?\n");
   scanf("%d", &number_aqua);
-  puts("Qual ração 1, 2 ou as duas(3)?\n");
-  scanf("%d", &number_tip);
+  puts("Qual ração 1, 2 do aquario 1?\n");
+  scanf("%d", &number_tip1);
+ if(number_aqua==3){
+  puts("Qual ração 1, 2 do aquario 2?\n");
+  scanf("%d", &number_tip2);
+  }
+
   //abre processos para motores funcionarem simultaneamente
   pthread_create(&thread_1,NULL,&alimentar,NULL);
+  sleep(1);
   pthread_create(&thread_2,NULL,&fuso,NULL);
   
   pthread_join (thread_1, NULL);
-  pthread_join (thread_2, NULL);
-  printf("aquario %d alimentado\n A(s) rações fornecida(s) %d", number_aqua,number_tip);    
+ // pthread_join (thread_2, NULL);
+  printf("aquario %d alimentado\n A(s) rações fornecida(s) %d", number_aqua,number_tip1);    
   
  return 0;
 }
 
 void* fuso()
 {
-      if(number_tip==1){
+      if(number_tip1==1 && number_tip2==0){
         if(number_aqua==1 || number_aqua==2){
-            while(conta>=4*passosPorRotacao && conta<=20*passosPorRotacao)
-            {
-                gira_fuso1();
-            }
-        }
-        else if(number_aqua==3){
-            while((conta>=(-20*passosPorRotacao) && conta<=(-4*passosPorRotacao)) || (conta>=4*passosPorRotacao && conta<=20*passosPorRotacao))
-            {
-                gira_fuso1();
-            } 
-          
-        }
-      }
-      else if(number_tip==2){
+    	  while(conta>0 && conta<=2*passosPorRotacao);
+	  while(conta>=2*passosPorRotacao && conta<=4*passosPorRotacao)
+          {
+            gira_fuso1();
+          }
+       }}
+      else if(number_tip1==2 && number_tip2==0){
             if(number_aqua==1 || number_aqua==2){
-                while(conta>=4*passosPorRotacao && conta<=20*passosPorRotacao)
+       	        while(conta>0 && conta<=2*passosPorRotacao);
+                while(conta>=2*passosPorRotacao && conta<=4*passosPorRotacao)
                 {
                     gira_fuso2();
                 }
             }
-            else if(number_aqua==3){
-                while((conta>=(-20*passosPorRotacao) && conta<=(-4*passosPorRotacao)) || (conta>=4*passosPorRotacao && conta<=20*passosPorRotacao))
-                {
-                    gira_fuso2();
-                } 
-              
-            }
       }
-      /*else if(number_tip==3){
-        //abre um process para girar os dois simultaneamente
-      }*/
+      else if(number_aqua==3)
+      {
+    	  while(conta>0 && conta<=2*passosPorRotacao);
+	  while(conta>=2*passosPorRotacao && conta<=4*passosPorRotacao)
+	  {
+		if(number_tip1==1){gira_fuso1();}
+		if(number_tip1==2){gira_fuso2();}
+	  }
+	//espera motor voltar p/ posição inicial
+	  while(conta!=0);
+	  sleep(1);
+	//espera passar vão entre aquarios
+     	  while(conta>0 && conta<=2*passosPorRotacao);
+	//dispensando raçao 1 no aquario 2
+	  while(conta>=2*passosPorRotacao && conta<=4*passosPorRotacao)
+	  {
+		if(number_tip2==1){gira_fuso1();}
+		if(number_tip2==2){gira_fuso2();}
+	  }
+      }
 }
 
 void* alimentar()
 {
-  int conta1=0, conta2=0;
     if(number_aqua==1)
     {
   while(digitalRead(FDC1)!=0)
@@ -159,22 +168,25 @@ void* alimentar()
     
     else if(number_aqua==3)
     {
-  while(digitalRead(FDC1)!=0)
-  {
-      sentidoHorario();
-      conta--;  
-  }
-   while(digitalRead(FDC2)!=0)
-  {
-      sentidoAntiHorario(); 
-      conta++;  
-  }
-  int contaT=(conta2-conta1);
-  while(conta>=0)
-  {
-      sentidoHorario(); 
-      conta--;
-  }
+	while(digitalRead(FDC1)!=0)
+    	{
+      	   sentidoHorario();
+           conta++;  
+        }
+	while(conta>=0){
+	   sentidoAntiHorario();
+	   conta--;
+	}
+        while(digitalRead(FDC2)!=0)
+        {
+           sentidoAntiHorario(); 
+           conta++;  
+        }
+ 	 while(conta>=0)
+  	{
+      	   sentidoHorario(); 
+           conta--;
+  	}
     }
 }
 void gira_fuso1(){
@@ -229,7 +241,7 @@ void setOutputFuso1(int out)
   var3=((Sequencia[out]>>2)&0x01);
   var4=((Sequencia[out]>>3)&0x01);
 
-  digitalWrite(fs11,var1);
+  digitalWrite(fs11, var1);
   digitalWrite(fs12, var2);
   digitalWrite(fs13, var3);
   digitalWrite(fs14, var4);
